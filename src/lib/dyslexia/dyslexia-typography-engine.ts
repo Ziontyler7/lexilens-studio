@@ -14,7 +14,11 @@
 
 export type DyslexiaTintId = 'warm-cream' | 'soft-sage' | 'calm-sky' | 'high-contrast-slate';
 
-export type DyslexiaFontFamilyId = 'lexend-sans' | 'opendyslexic-weighted' | 'atkinson-hyperlegible';
+export type DyslexiaFontFamilyId =
+  | 'lexend-sans'
+  | 'opendyslexic-weighted'
+  | 'atkinson-hyperlegible'
+  | 'rello-monospace';
 
 export interface DyslexiaThemePreset {
   id: DyslexiaTintId;
@@ -30,11 +34,13 @@ export interface DyslexiaThemePreset {
 
 export interface DyslexiaTypographyConfig {
   fontFamily: DyslexiaFontFamilyId;
-  fontSizePx: number;       // 16..28
-  letterSpacingEm: number;  // 0.04..0.20 (British Dyslexia Association recommends >= 0.08em)
-  wordSpacingEm: number;    // 0.12..0.35 (BDA recommends >= 0.16em)
-  lineHeight: number;       // 1.5..2.2 (BDA recommends >= 1.6)
-  syllableSep: string;      // e.g. "·"
+  fontSizePx: number;         // 16..28 (Rello & Baeza-Yates recommend >= 18px)
+  letterSpacingEm: number;    // 0.04..0.24 (WCAG 2.2 SC 1.4.12 requires >= 0.12em)
+  wordSpacingEm: number;      // 0.12..0.35 (WCAG 2.2 SC 1.4.12 requires >= 0.16em)
+  lineHeight: number;         // 1.5..2.2 (WCAG 2.2 SC 1.4.12 requires >= 1.5)
+  paragraphSpacingEm: number; // 1.5..2.8 (WCAG 2.2 SC 1.4.12 requires >= 2.0em)
+  maxLineMeasureCh: number;   // 45..70 (British Dyslexia Association recommends <= 66ch)
+  syllableSep: string;        // e.g. "·"
   bionicAnchorEnabled: boolean;
   syllableSpacingEnabled: boolean;
   lineFocusRulerEnabled: boolean;
@@ -114,15 +120,18 @@ export const DYSLEXIA_THEME_PRESETS: Record<DyslexiaTintId, DyslexiaThemePreset>
 export const DEFAULT_DYSLEXIA_CONFIG: DyslexiaTypographyConfig = {
   fontFamily: 'lexend-sans',
   fontSizePx: 19,
-  letterSpacingEm: 0.08,
+  letterSpacingEm: 0.12,
   wordSpacingEm: 0.18,
   lineHeight: 1.8,
+  paragraphSpacingEm: 2.0,
+  maxLineMeasureCh: 66,
   syllableSep: '·',
   bionicAnchorEnabled: true,
   syllableSpacingEnabled: true,
   lineFocusRulerEnabled: true,
   tintId: 'warm-cream',
 };
+
 
 /**
  * Curated morphological & syllable dictionary for high-frequency STEM, medical, and legal terms
@@ -403,3 +412,94 @@ export function computeReadabilityMetrics(text: string): ReadabilityMetrics {
     fleschReadingEase,
   };
 }
+
+export interface WcagTextSpacingAndBdaAudit {
+  wcag1412Compliant: boolean;
+  bdaRelloCompliant: boolean;
+  lineHeightPass: boolean;
+  paragraphSpacingPass: boolean;
+  letterSpacingPass: boolean;
+  wordSpacingPass: boolean;
+  fontSizePass: boolean;
+  lineMeasurePass: boolean;
+}
+
+/**
+ * Audits a DyslexiaTypographyConfig against:
+ * 1. W3C WCAG 2.2 Success Criterion 1.4.12 (Text Spacing):
+ *    - lineHeight >= 1.5
+ *    - paragraphSpacingEm >= 2.0
+ *    - letterSpacingEm >= 0.12
+ *    - wordSpacingEm >= 0.16
+ * 2. British Dyslexia Association (BDA) & Rello / Baeza-Yates Empirical Guidelines:
+ *    - fontSizePx >= 18
+ *    - maxLineMeasureCh between 45 and 70 ch
+ */
+export function auditWcagTextSpacingAndBdaCompliance(
+  config: DyslexiaTypographyConfig
+): WcagTextSpacingAndBdaAudit {
+  const lineHeightPass = config.lineHeight >= 1.5;
+  const paragraphSpacingPass = config.paragraphSpacingEm >= 2.0;
+  const letterSpacingPass = config.letterSpacingEm >= 0.12;
+  const wordSpacingPass = config.wordSpacingEm >= 0.16;
+  const fontSizePass = config.fontSizePx >= 18;
+  const lineMeasurePass =
+    config.maxLineMeasureCh >= 45 && config.maxLineMeasureCh <= 70;
+
+  return {
+    wcag1412Compliant:
+      lineHeightPass &&
+      paragraphSpacingPass &&
+      letterSpacingPass &&
+      wordSpacingPass,
+    bdaRelloCompliant: fontSizePass && lineMeasurePass,
+    lineHeightPass,
+    paragraphSpacingPass,
+    letterSpacingPass,
+    wordSpacingPass,
+    fontSizePass,
+    lineMeasurePass,
+  };
+}
+
+const PRESERVED_UPPERCASE_ACRONYMS = new Set([
+  'ATP',
+  'ADP',
+  'NADH',
+  'FADH2',
+  'DNA',
+  'RNA',
+  'MRNA',
+  'TRNA',
+  'STEM',
+  'MRI',
+  'CT',
+  'ECG',
+  'EKG',
+  'ICU',
+  'ER',
+  'FDA',
+  'WCAG',
+  'BDA',
+  'USD',
+  'APR',
+  'HIPAA',
+  'NSAID',
+  'NSAIDS',
+]);
+
+/**
+ * Implements the British Dyslexia Association (BDA) & Rello/Baeza-Yates
+ * anti-crowding rule: converts shouting ALL-CAPS words (>3 letters, unless a
+ * known clinical/STEM acronym) into readable lowercase/sentence-case so word-shape
+ * (bouma) recognition is preserved.
+ */
+export function normalizeTextForBdaAntiCrowding(text: string): string {
+  return text.replace(/\b([A-Z]{4,})\b/g, (match) => {
+    if (PRESERVED_UPPERCASE_ACRONYMS.has(match)) {
+      return match;
+    }
+    return match.charAt(0) + match.slice(1).toLowerCase();
+  });
+}
+

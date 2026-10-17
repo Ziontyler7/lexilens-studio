@@ -1,8 +1,8 @@
 # LexiLens Studio — Build With AI: Basics Submission Checklist
 
-- [x] **Gate 1 (`DyslexiaTypographyEngine`)**: Syllable segmentation, Bionic saccade bold-prefix anchors, WCAG AAA contrast verification (`>= 7.0:1`), and Flesch-Kincaid readability scoring verified.
+- [x] **Gate 1 (`DyslexiaTypographyEngine`)**: Syllable segmentation, Bionic saccade bold-prefix anchors, WCAG AAA contrast verification (`>= 7.0:1`), **WCAG 2.2 SC 1.4.12 Text Spacing** (`0.12em` letter, `0.18em` word, `1.75` line-height, `2.0em` paragraph), **British Dyslexia Association (BDA)** `60–70ch` measure & `ALL-CAPS` anti-crowding normalizer, **Rello & Baeza-Yates (2013)** monospace font option, and Flesch-Kincaid readability scoring verified.
 - [x] **Gate 2 (`ClauseSimplifierEngine`)**: All 4 pre-loaded domains (STEM Biology, Clinical Cardiology Discharge, Residential Lease Contract, Quantum Physics) + custom text analyzer reduce reading grade level while preserving 100% of numbers, dosages, and currencies.
 - [x] **Gate 3 (`ConceptGraphEngine`)**: Directed Acyclic Graph (DAG) node/edge builder verified with zero bounding-box overlaps across all 3 layers.
 - [x] **Gate 4 (`AudioExplainerEngine`)**: Monotonic word-by-word timing cues and punctuation pauses verified across `0.75x`–`1.25x` speech rates.
-- [x] **Gate 5 (`AIInferenceAdapter`)**: Dual-Mode AI Adapter verified for instant zero-key local inference and automatic circuit-breaker fallback on malformed or timed-out BYOK payloads.
-- [x] **Gate 6 (`CleanRoomAudit`)**: Zero TypeScript errors, zero external CDN dependencies, and automated clean-room verification passing.
+- [x] **Gate 5 (`AIInferenceAdapter`)**: Dual-Mode AI Adapter verified for instant zero-key local inference, enforced **Google Gemini `responseSchema`** (`type: 'OBJECT'`) and **OpenAI `json_schema` (`strict: true`)** structured outputs, and automatic `3,800ms` circuit-breaker fallback on malformed or timed-out BYOK payloads.
+- [x] **Gate 6 (`CleanRoomAudit`)**: Zero TypeScript errors, zero external CDN dependencies, [`devpost/AI_BEST_PRACTICES.md`](AI_BEST_PRACTICES.md) judge documentation, and automated clean-room verification passing.

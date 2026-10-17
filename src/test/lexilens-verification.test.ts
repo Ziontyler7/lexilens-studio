@@ -15,11 +15,14 @@ import fs from 'node:fs';
 import path from 'node:path';
 import {
   DYSLEXIA_THEME_PRESETS,
+  DEFAULT_DYSLEXIA_CONFIG,
   segmentWordIntoSyllables,
   tokenizeWordForDyslexia,
   formatParagraphForDyslexia,
   computeHexContrastRatio,
   computeReadabilityMetrics,
+  auditWcagTextSpacingAndBdaCompliance,
+  normalizeTextForBdaAntiCrowding,
 } from '../lib/dyslexia/dyslexia-typography-engine.ts';
 import {
   SHOWCASE_DOCUMENTS,
@@ -36,6 +39,8 @@ import {
   findActiveWordCueIndex,
 } from '../lib/audio/audio-explainer-engine.ts';
 import {
+  buildGeminiStructuredOutputPayload,
+  buildOpenAIStructuredOutputPayload,
   runDocumentInference,
   validateAndHydrateLLMResponse,
 } from '../lib/ai/ai-inference-adapter.ts';
@@ -45,7 +50,7 @@ async function runVerificationSuite(): Promise<void> {
   let passedGates = 0;
 
   // =========================================================================
-  // GATE 1: DyslexiaTypographyEngine
+  // GATE 1: DyslexiaTypographyEngine (WCAG 2.2 SC 1.4.12 + BDA / Rello-Baeza)
   // =========================================================================
   {
     const sylMito = segmentWordIntoSyllables('mitochondria');
@@ -73,10 +78,26 @@ async function runVerificationSuite(): Promise<void> {
       );
     }
 
+    // Verify WCAG 2.2 SC 1.4.12 (Text Spacing) & BDA / Rello-Baeza defaults
+    const wcagBda = auditWcagTextSpacingAndBdaCompliance(DEFAULT_DYSLEXIA_CONFIG);
+    assert.equal(wcagBda.wcag1412Compliant, true, 'Default config must pass WCAG 2.2 SC 1.4.12');
+    assert.equal(wcagBda.bdaRelloCompliant, true, 'Default config must pass BDA & Rello-Baeza guidelines');
+    assert.equal(wcagBda.letterSpacingPass, true);
+    assert.equal(wcagBda.paragraphSpacingPass, true);
+
+    // Verify BDA ALL-CAPS de-crowding normalizer preserves STEM/clinical acronyms
+    const deCrowded = normalizeTextForBdaAntiCrowding(
+      'TENANT SHALL REMIT PAYMENT WHILE ATP AND NADH LEVELS STABILIZE.'
+    );
+    assert.equal(
+      deCrowded,
+      'Tenant Shall Remit Payment While ATP AND NADH Levels Stabilize.'
+    );
+
     const denseMetrics = computeReadabilityMetrics(SHOWCASE_DOCUMENTS[0].originalText);
     assert.ok(denseMetrics.fleschKincaidGrade >= 12, 'Dense STEM passage should score at college/AP grade level');
     passedGates += 1;
-    console.log('✅ Gate 1 PASSED: DyslexiaTypographyEngine (Syllables, Bionic Anchors, WCAG AAA Contrast & Readability)');
+    console.log('✅ Gate 1 PASSED: DyslexiaTypographyEngine (WCAG 2.2 SC 1.4.12, BDA/Rello, Syllables & WCAG AAA Contrast)');
   }
 
   // =========================================================================
@@ -164,7 +185,7 @@ async function runVerificationSuite(): Promise<void> {
   }
 
   // =========================================================================
-  // GATE 5: AIInferenceAdapter (Local Instant + BYOK Circuit Breaker)
+  // GATE 5: AIInferenceAdapter (Local Instant + responseSchema + Circuit Breaker)
   // =========================================================================
   {
     // 1. Instant local deterministic mode
@@ -175,7 +196,17 @@ async function runVerificationSuite(): Promise<void> {
     assert.equal(localEnv.fallbackTriggered, false);
     assert.equal(localEnv.result.entityPreservationPassed, true);
 
-    // 2. Simulated BYOK network error -> must gracefully fall back to deterministic engine without throwing
+    // 2. Verify @google/genai responseSchema & OpenAI strict json_schema payload builders
+    const geminiPayload = buildGeminiStructuredOutputPayload('Administer 75 mg daily.');
+    assert.equal(geminiPayload.generationConfig.responseMimeType, 'application/json');
+    assert.equal(geminiPayload.generationConfig.responseSchema.type, 'OBJECT');
+    assert.deepEqual(geminiPayload.generationConfig.responseSchema.required, ['title', 'clauses']);
+
+    const openaiPayload = buildOpenAIStructuredOutputPayload('Administer 75 mg daily.');
+    assert.equal(openaiPayload.response_format.type, 'json_schema');
+    assert.equal(openaiPayload.response_format.json_schema.strict, true);
+
+    // 3. Simulated BYOK network error -> must gracefully fall back to deterministic engine without throwing
     const failingFetch: typeof fetch = async () => {
       throw new Error('Simulated 503 Service Unavailable');
     };
@@ -189,7 +220,7 @@ async function runVerificationSuite(): Promise<void> {
     assert.equal(fallbackEnv.fallbackTriggered, true);
     assert.ok(fallbackEnv.fallbackReason?.includes('Simulated 503'));
 
-    // 3. Valid structured LLM JSON hydration test
+    // 4. Valid structured LLM JSON hydration test
     const mockJson = JSON.stringify({
       title: 'Hydrated Test Document',
       clauses: [
@@ -207,7 +238,7 @@ async function runVerificationSuite(): Promise<void> {
     assert.equal(hydrated.clauses[0].preservedEntities[0], '75');
 
     passedGates += 1;
-    console.log('✅ Gate 5 PASSED: AIInferenceAdapter (Local Deterministic + BYOK Circuit-Breaker Fallback)');
+    console.log('✅ Gate 5 PASSED: AIInferenceAdapter (Gemini responseSchema, OpenAI json_schema & Circuit-Breaker Fallback)');
   }
 
   // =========================================================================
@@ -255,6 +286,7 @@ async function runVerificationSuite(): Promise<void> {
       'vite.config.ts',
       'index.html',
       'README.md',
+      'devpost/AI_BEST_PRACTICES.md',
       'devpost/PRD.md',
       'devpost/ARCHITECTURE.md',
       'devpost/SUBMISSION_CHECKLIST.md',
@@ -289,3 +321,4 @@ async function runVerificationSuite(): Promise<void> {
 }
 
 await runVerificationSuite();
+

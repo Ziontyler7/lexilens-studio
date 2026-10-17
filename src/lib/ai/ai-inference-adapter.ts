@@ -123,6 +123,141 @@ export function validateAndHydrateLLMResponse(
   };
 }
 
+export const LEXILENS_SYSTEM_INSTRUCTION = [
+  'You are LexiLens Studio, a clinical, STEM, and legal dyslexia simplification engine.',
+  'Simplify each sentence into plain, low-glare reading clauses while preserving 100% of numbers, dosages, percentages, and deadlines.',
+  'Avoid ALL-CAPS words and italics per British Dyslexia Association (BDA) and Rello/Baeza-Yates typography guidelines.',
+].join(' ');
+
+/**
+ * Official `@google/genai` / Gemini REST API `responseSchema` (`type: 'OBJECT'`)
+ * enforcing 100% valid JSON clause structures from `gemini-2.5-flash`.
+ */
+export const LEXILENS_GEMINI_RESPONSE_SCHEMA = {
+  type: 'OBJECT',
+  properties: {
+    title: {
+      type: 'STRING',
+      description: 'Concise plain-language document title.',
+    },
+    clauses: {
+      type: 'ARRAY',
+      description: 'Ordered array of simplified dyslexia-friendly reading clauses.',
+      items: {
+        type: 'OBJECT',
+        properties: {
+          originalClause: {
+            type: 'STRING',
+            description: 'Exact original sentence or clause.',
+          },
+          simplifiedClause: {
+            type: 'STRING',
+            description: 'Plain-language simplified clause preserving 100% of numbers, dosages, and dates.',
+          },
+          keyTakeaway: {
+            type: 'STRING',
+            description: 'One-line action or comprehension summary.',
+          },
+          riskSeverity: {
+            type: 'STRING',
+            enum: ['critical', 'warning', 'action-required', 'info'],
+            description: 'Clinical, financial, or conceptual importance level.',
+          },
+          riskBadgeLabel: {
+            type: 'STRING',
+            description: 'Short 2-4 word badge label for this clause.',
+          },
+        },
+        required: [
+          'originalClause',
+          'simplifiedClause',
+          'keyTakeaway',
+          'riskSeverity',
+          'riskBadgeLabel',
+        ],
+      },
+    },
+  },
+  required: ['title', 'clauses'],
+} as const;
+
+/**
+ * Official OpenAI Structured Outputs `response_format` (`type: 'json_schema'`, `strict: true`).
+ */
+export const LEXILENS_OPENAI_JSON_SCHEMA = {
+  type: 'json_schema',
+  json_schema: {
+    name: 'lexilens_document_simplification',
+    strict: true,
+    schema: {
+      type: 'object',
+      additionalProperties: false,
+      properties: {
+        title: { type: 'string' },
+        clauses: {
+          type: 'array',
+          items: {
+            type: 'object',
+            additionalProperties: false,
+            properties: {
+              originalClause: { type: 'string' },
+              simplifiedClause: { type: 'string' },
+              keyTakeaway: { type: 'string' },
+              riskSeverity: {
+                type: 'string',
+                enum: ['critical', 'warning', 'action-required', 'info'],
+              },
+              riskBadgeLabel: { type: 'string' },
+            },
+            required: [
+              'originalClause',
+              'simplifiedClause',
+              'keyTakeaway',
+              'riskSeverity',
+              'riskBadgeLabel',
+            ],
+          },
+        },
+      },
+      required: ['title', 'clauses'],
+    },
+  },
+} as const;
+
+export function buildGeminiStructuredOutputPayload(inputText: string) {
+  return {
+    systemInstruction: {
+      parts: [{ text: LEXILENS_SYSTEM_INSTRUCTION }],
+    },
+    contents: [
+      {
+        role: 'user',
+        parts: [{ text: `Document:\n${inputText}` }],
+      },
+    ],
+    generationConfig: {
+      responseMimeType: 'application/json',
+      responseSchema: LEXILENS_GEMINI_RESPONSE_SCHEMA,
+      temperature: 0.1,
+    },
+  };
+}
+
+export function buildOpenAIStructuredOutputPayload(
+  inputText: string,
+  model = 'gpt-4o-mini'
+) {
+  return {
+    model,
+    temperature: 0.1,
+    response_format: LEXILENS_OPENAI_JSON_SCHEMA,
+    messages: [
+      { role: 'system', content: LEXILENS_SYSTEM_INSTRUCTION },
+      { role: 'user', content: inputText },
+    ],
+  };
+}
+
 /**
  * Executes document analysis using either the instant local deterministic engine
  * or an optional BYOK provider with automatic circuit-breaker fallback.
@@ -165,12 +300,6 @@ export async function runDocumentInference(
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
 
-  const systemPrompt = [
-    'You are LexiLens Studio, a clinical and STEM dyslexia simplification engine.',
-    'Simplify each sentence into plain, low-glare reading clauses while preserving 100% of numbers, dosages, percentages, and deadlines.',
-    'Return ONLY valid JSON matching: {"title": string, "clauses": [{"originalClause": string, "simplifiedClause": string, "keyTakeaway": string, "riskSeverity": "critical"|"warning"|"action-required"|"info", "riskBadgeLabel": string}]}',
-  ].join(' ');
-
   try {
     let rawContent = '';
 
@@ -184,10 +313,7 @@ export async function runDocumentInference(
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         signal: controller.signal,
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: `${systemPrompt}\n\nDocument:\n${inputText}` }] }],
-          generationConfig: { responseMimeType: 'application/json', temperature: 0.1 },
-        }),
+        body: JSON.stringify(buildGeminiStructuredOutputPayload(inputText)),
       });
 
       if (!res.ok) {
@@ -206,14 +332,7 @@ export async function runDocumentInference(
           Authorization: `Bearer ${config.apiKey.trim()}`,
         },
         signal: controller.signal,
-        body: JSON.stringify({
-          model,
-          temperature: 0.1,
-          messages: [
-            { role: 'system', content: systemPrompt },
-            { role: 'user', content: inputText },
-          ],
-        }),
+        body: JSON.stringify(buildOpenAIStructuredOutputPayload(inputText, model)),
       });
 
       if (!res.ok) {
@@ -246,3 +365,4 @@ export async function runDocumentInference(
     };
   }
 }
+

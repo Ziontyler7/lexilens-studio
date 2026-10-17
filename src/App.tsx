@@ -4,6 +4,8 @@ import {
   DEFAULT_DYSLEXIA_CONFIG,
   formatParagraphForDyslexia,
   computeHexContrastRatio,
+  auditWcagTextSpacingAndBdaCompliance,
+  normalizeTextForBdaAntiCrowding,
   type DyslexiaTypographyConfig,
   type DyslexiaTintId,
   type DyslexiaFontFamilyId,
@@ -25,9 +27,12 @@ import {
   type SpeechRateMultiplier,
 } from './lib/audio/audio-explainer-engine.ts';
 import {
+  LEXILENS_GEMINI_RESPONSE_SCHEMA,
+  LEXILENS_OPENAI_JSON_SCHEMA,
   runDocumentInference,
   type AIProviderMode,
 } from './lib/ai/ai-inference-adapter.ts';
+
 
 const STORAGE_KEY_CONFIG = 'lexilens.typography.v1';
 
@@ -337,16 +342,23 @@ export default function App(): React.ReactElement {
     };
   }, []);
 
+  const [showSchemaInspector, setShowSchemaInspector] = useState<boolean>(false);
+
   const theme = DYSLEXIA_THEME_PRESETS[typoConfig.tintId];
   const contrastRatio = useMemo(
     () => computeHexContrastRatio(theme.backgroundHex, theme.textPrimaryHex),
     [theme]
+  );
+  const wcagBdaAudit = useMemo(
+    () => auditWcagTextSpacingAndBdaCompliance(typoConfig),
+    [typoConfig]
   );
 
   const fontStackMap: Record<DyslexiaFontFamilyId, string> = {
     'lexend-sans': '"Lexend", "Avenir Next", "Segoe UI", Roboto, system-ui, sans-serif',
     'opendyslexic-weighted': '"OpenDyslexic", "Comic Sans MS", "Trebuchet MS", Verdana, sans-serif',
     'atkinson-hyperlegible': '"Atkinson Hyperlegible", "Verdana", "Tahoma", system-ui, sans-serif',
+    'rello-monospace': '"JetBrains Mono", "Fira Code", "SFMono-Regular", Consolas, monospace',
   };
 
   const severityStyles: Record<
@@ -427,7 +439,7 @@ export default function App(): React.ReactElement {
             <Eye size={24} />
           </div>
           <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
               <h1 style={{ margin: 0, fontSize: '22px', fontWeight: 800, letterSpacing: '0.02em' }}>
                 LexiLens Studio
               </h1>
@@ -442,6 +454,19 @@ export default function App(): React.ReactElement {
                 }}
               >
                 WCAG AAA {contrastRatio}:1
+              </span>
+              <span
+                style={{
+                  fontSize: '12px',
+                  fontWeight: 700,
+                  padding: '3px 10px',
+                  borderRadius: '999px',
+                  backgroundColor: wcagBdaAudit.wcag1412Compliant ? '#DCFCE7' : '#FEF3C7',
+                  color: wcagBdaAudit.wcag1412Compliant ? '#166534' : '#92400E',
+                  border: '1px solid #16653433',
+                }}
+              >
+                WCAG 2.2 SC 1.4.12 {wcagBdaAudit.wcag1412Compliant ? 'Verified' : 'Custom'} · BDA {typoConfig.maxLineMeasureCh}ch
               </span>
             </div>
             <p style={{ margin: '2px 0 0 0', fontSize: '13px', color: theme.textSecondaryHex }}>
@@ -509,56 +534,115 @@ export default function App(): React.ReactElement {
             backgroundColor: theme.surfaceHex,
             border: `2px solid ${theme.accentHex}`,
             display: 'flex',
-            flexWrap: 'wrap',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            gap: '16px',
+            flexDirection: 'column',
+            gap: '14px',
           }}
         >
-          <div>
-            <strong style={{ fontSize: '14px', display: 'block' }}>
-              Dual-Mode AI Inference Adapter (Zero-Setup Judge Mode + Optional BYOK)
-            </strong>
-            <span style={{ fontSize: '12px', color: theme.textSecondaryHex }}>{aiStatusBanner}</span>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
-            <select
-              aria-label="Select AI Provider Mode"
-              value={aiMode}
-              onChange={(e) => setAiMode(e.target.value as AIProviderMode)}
-              style={{
-                padding: '8px 12px',
-                borderRadius: '8px',
-                border: `1px solid ${theme.textSecondaryHex}66`,
-                backgroundColor: theme.backgroundHex,
-                color: theme.textPrimaryHex,
-                fontWeight: 600,
-              }}
-            >
-              <option value="local-deterministic">Local Deterministic AI (Instant / Offline Ready)</option>
-              <option value="gemini-byok">Google Gemini 2.5 Flash (BYOK + Auto-Fallback)</option>
-              <option value="openai-byok">OpenAI GPT-4o-Mini (BYOK + Auto-Fallback)</option>
-            </select>
-
-            {aiMode !== 'local-deterministic' && (
-              <input
-                type="password"
-                placeholder="Paste optional API Key (auto-falls back if blank)"
-                value={byokKey}
-                onChange={(e) => setByokKey(e.target.value)}
+          <div
+            style={{
+              display: 'flex',
+              flexWrap: 'wrap',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: '16px',
+            }}
+          >
+            <div>
+              <strong style={{ fontSize: '14px', display: 'block' }}>
+                Dual-Mode AI Inference Adapter (Zero-Setup Judge Mode + Optional BYOK with `responseSchema`)
+              </strong>
+              <span style={{ fontSize: '12px', color: theme.textSecondaryHex }}>{aiStatusBanner}</span>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+              <select
+                aria-label="Select AI Provider Mode"
+                value={aiMode}
+                onChange={(e) => setAiMode(e.target.value as AIProviderMode)}
                 style={{
                   padding: '8px 12px',
                   borderRadius: '8px',
                   border: `1px solid ${theme.textSecondaryHex}66`,
-                  width: '280px',
                   backgroundColor: theme.backgroundHex,
                   color: theme.textPrimaryHex,
+                  fontWeight: 600,
                 }}
-              />
-            )}
+              >
+                <option value="local-deterministic">Local Deterministic AI (Instant / Offline Ready)</option>
+                <option value="gemini-byok">Google Gemini 2.5 Flash (BYOK + responseSchema)</option>
+                <option value="openai-byok">OpenAI GPT-4o-Mini (BYOK + strict json_schema)</option>
+              </select>
+
+              {aiMode !== 'local-deterministic' && (
+                <input
+                  type="password"
+                  placeholder="Paste optional API Key (auto-falls back if blank)"
+                  value={byokKey}
+                  onChange={(e) => setByokKey(e.target.value)}
+                  style={{
+                    padding: '8px 12px',
+                    borderRadius: '8px',
+                    border: `1px solid ${theme.textSecondaryHex}66`,
+                    width: '280px',
+                    backgroundColor: theme.backgroundHex,
+                    color: theme.textPrimaryHex,
+                  }}
+                />
+              )}
+
+              <button
+                type="button"
+                onClick={() => setShowSchemaInspector((prev) => !prev)}
+                style={{
+                  padding: '8px 12px',
+                  borderRadius: '8px',
+                  border: `1px solid ${theme.accentHex}`,
+                  backgroundColor: theme.backgroundHex,
+                  color: theme.textPrimaryHex,
+                  fontWeight: 700,
+                  fontSize: '12px',
+                  cursor: 'pointer',
+                }}
+              >
+                {showSchemaInspector ? 'Hide' : 'Inspect'} Structured JSON Schema
+              </button>
+            </div>
           </div>
+
+          {showSchemaInspector && (
+            <div
+              style={{
+                padding: '12px 16px',
+                borderRadius: '10px',
+                backgroundColor: theme.backgroundHex,
+                border: `1px solid ${theme.textSecondaryHex}33`,
+                fontSize: '12px',
+              }}
+            >
+              <div style={{ fontWeight: 800, marginBottom: '6px', color: theme.accentHex }}>
+                Enforced Structured Output Contract ({aiMode === 'openai-byok' ? 'OpenAI strict json_schema' : '@google/genai responseSchema (type: OBJECT)'}):
+              </div>
+              <pre
+                style={{
+                  margin: 0,
+                  maxHeight: '180px',
+                  overflowY: 'auto',
+                  fontFamily: 'monospace',
+                  fontSize: '11px',
+                }}
+              >
+                {JSON.stringify(
+                  aiMode === 'openai-byok'
+                    ? LEXILENS_OPENAI_JSON_SCHEMA
+                    : LEXILENS_GEMINI_RESPONSE_SCHEMA,
+                  null,
+                  2
+                )}
+              </pre>
+            </div>
+          )}
         </section>
       )}
+
 
       {/* Main Studio Container */}
       <main style={{ maxWidth: '1360px', margin: '0 auto', padding: '24px 28px' }}>
@@ -846,6 +930,51 @@ export default function App(): React.ReactElement {
                 />
                 <span>Active Clause Focus Band</span>
               </label>
+
+              <select
+                aria-label="Dyslexia Font Family"
+                value={typoConfig.fontFamily}
+                onChange={(e) =>
+                  setTypoConfig((c) => ({
+                    ...c,
+                    fontFamily: e.target.value as DyslexiaFontFamilyId,
+                  }))
+                }
+                style={{
+                  padding: '5px 8px',
+                  borderRadius: '6px',
+                  border: `1px solid ${theme.textSecondaryHex}55`,
+                  backgroundColor: theme.backgroundHex,
+                  color: theme.textPrimaryHex,
+                  fontSize: '12px',
+                  fontWeight: 700,
+                }}
+              >
+                <option value="lexend-sans">Font: Lexend Sans (BDA Default)</option>
+                <option value="rello-monospace">Font: Rello &amp; Baeza Monospace</option>
+                <option value="atkinson-hyperlegible">Font: Atkinson Hyperlegible</option>
+                <option value="opendyslexic-weighted">Font: OpenDyslexic Weighted</option>
+              </select>
+
+              <button
+                type="button"
+                onClick={() => {
+                  const normalized = normalizeTextForBdaAntiCrowding(customInputText);
+                  setCustomInputText(normalized);
+                }}
+                style={{
+                  padding: '5px 10px',
+                  borderRadius: '6px',
+                  border: `1px solid ${theme.accentHex}`,
+                  backgroundColor: theme.backgroundHex,
+                  color: theme.textPrimaryHex,
+                  fontSize: '11px',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                }}
+              >
+                BDA De-Crowd ALL-CAPS
+              </button>
             </div>
 
             {/* Sliders for Font Size, Letter Spacing, Line Height */}
@@ -875,12 +1004,12 @@ export default function App(): React.ReactElement {
               </div>
               <div>
                 <div style={{ fontWeight: 700, marginBottom: '4px' }}>
-                  Letter Space: {(typoConfig.letterSpacingEm * 100).toFixed(0)}%
+                  Letter Space: {(typoConfig.letterSpacingEm * 100).toFixed(0)}% (WCAG &ge;12%)
                 </div>
                 <input
                   type="range"
                   min={0.04}
-                  max={0.18}
+                  max={0.2}
                   step={0.02}
                   value={typoConfig.letterSpacingEm}
                   onChange={(e) =>
@@ -891,7 +1020,7 @@ export default function App(): React.ReactElement {
               </div>
               <div>
                 <div style={{ fontWeight: 700, marginBottom: '4px' }}>
-                  Line Height: {typoConfig.lineHeight.toFixed(1)}x
+                  Line Height: {typoConfig.lineHeight.toFixed(1)}x (Para {typoConfig.paragraphSpacingEm.toFixed(1)}em)
                 </div>
                 <input
                   type="range"
@@ -908,6 +1037,7 @@ export default function App(): React.ReactElement {
             </div>
           </section>
         </div>
+
 
         {/* Row 2: Interactive Visual Concept Map (SVG DAG) */}
         <section
