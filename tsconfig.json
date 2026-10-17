@@ -1,0 +1,29 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "useDefineForClassFields": true,
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "skipLibCheck": true,
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
+    "isolatedModules": true,
+    "moduleDetection": "force",
+    "noEmit": true,
+    "jsx": "react-jsx",
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noFallthroughCasesInSwitch": true
+  },
+  "files": [
+    "src/main.tsx",
+    "src/App.tsx",
+    "src/lib/dyslexia/dyslexia-typography-engine.ts",
+    "src/lib/simplifier/clause-simplifier-engine.ts",
+    "src/lib/concept/concept-graph-engine.ts",
+    "src/lib/audio/audio-explainer-engine.ts",
+    "src/lib/ai/ai-inference-adapter.ts",
+    "src/test/lexilens-verification.test.ts"
+  ]
+}
