@@ -7,7 +7,7 @@
 
 ## 1. Schema-Enforced Structured Output (`@google/genai` `responseSchema` & OpenAI `json_schema`)
 
-One of the most common failure modes in beginner AI applications is relying on free-form prompt instructions (`"Please return valid JSON"`) without enforcing a grammar-level schema at the model generation layer. In **LexiLens Studio** ([`src/lib/ai/ai-inference-adapter.ts`](file:///Users/zion/Desktop/lexilens-studio/src/lib/ai/ai-inference-adapter.ts)):
+One of the most common failure modes in beginner AI applications is relying on free-form prompt instructions (`"Please return valid JSON"`) without enforcing a grammar-level schema at the model generation layer. In **LexiLens Studio** ([`src/lib/ai/ai-inference-adapter.ts`](../src/lib/ai/ai-inference-adapter.ts)):
 - **Google Gemini 2.5 Flash (`gemini-2.5-flash`)**: Requests enforce `generationConfig.responseMimeType = "application/json"` paired with `generationConfig.responseSchema = LEXILENS_GEMINI_RESPONSE_SCHEMA` (`type: "OBJECT"`, `properties: { title, clauses }`, `required: ["title", "clauses"]`).
 - **OpenAI GPT-4o-Mini (`gpt-4o-mini`)**: Requests enforce `response_format = LEXILENS_OPENAI_JSON_SCHEMA` (`type: "json_schema"`, `strict: true`, `additionalProperties: false`).
 - **Post-Generation Hydration & Guardrail Validation (`validateAndHydrateLLMResponse`)**: Even when a model returns valid JSON, LexiLens runs a deterministic post-processor that checks every clause against `verifyCriticalEntityPreservation()` before rendering it to the user.
@@ -31,7 +31,7 @@ To ensure judges and users can test LexiLens Studio immediately without hunting 
 
 ## 4. Empirical Dyslexia Typography Standards (`WCAG 2.2 SC 1.4.12`, `BDA` & `Rello / Baeza-Yates`)
 
-LexiLens Studio's typography engine ([`src/lib/dyslexia/dyslexia-typography-engine.ts`](file:///Users/zion/Desktop/lexilens-studio/src/lib/dyslexia/dyslexia-typography-engine.ts)) implements three peer-reviewed accessibility standards:
+LexiLens Studio's typography engine ([`src/lib/dyslexia/dyslexia-typography-engine.ts`](../src/lib/dyslexia/dyslexia-typography-engine.ts)) implements three peer-reviewed accessibility standards:
 1. **W3C WCAG 2.2 Success Criterion 1.4.12 (Text Spacing)**:
    - Default `letterSpacingEm: 0.12` (`>= 0.12em` tracking minimum)
    - Default `wordSpacingEm: 0.18` (`>= 0.16em` word spacing minimum)

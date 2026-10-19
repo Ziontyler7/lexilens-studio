@@ -245,7 +245,7 @@ async function runVerificationSuite(): Promise<void> {
   // GATE 6: Clean-Room & Port 5181 Isolation Audit
   // =========================================================================
   {
-    const repoRoot = '/Users/zion/Desktop/lexilens-studio';
+    const repoRoot = process.cwd();
 
     // Construct forbidden tokens dynamically via joins so the test file itself remains 100% clean-room
     const forbiddenTokens = [
@@ -290,6 +290,9 @@ async function runVerificationSuite(): Promise<void> {
       'devpost/PRD.md',
       'devpost/ARCHITECTURE.md',
       'devpost/SUBMISSION_CHECKLIST.md',
+      'devpost/DEVPOST_SUBMISSION.md', 'devpost/AI_BEST_PRACTICES.md', 'devpost/PRD.md', 'devpost/ARCHITECTURE.md', 'devpost/SUBMISSION_CHECKLIST.md', 'firebase.json',
+      'LICENSE',
+      '.env.example',
     ];
 
     let auditedFileCount = 0;
